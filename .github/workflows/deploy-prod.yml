@@ -3,10 +3,6 @@ name: Deploy Production
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'デプロイするバージョン（例：v1.0.0）'
-        required: true
-        type: string
       confirm:
         description: '本番デプロイを確認しましたか？'
         required: true
@@ -31,7 +27,7 @@ jobs:
       # 指定バージョンのコードを取得
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.version }}
+          ref: ${{ github.ref_name }}
 
       # AWS認証
       - uses: aws-actions/configure-aws-credentials@v4
