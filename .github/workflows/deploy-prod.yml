@@ -1,0 +1,66 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'デプロイするバージョン（例：v1.0.0）'
+        required: true
+        type: string
+      confirm:
+        description: '本番デプロイを確認しましたか？'
+        required: true
+        type: boolean
+        default: false
+env:
+  ROLE_ARN: arn:aws:iam::${{secrets.AWS_ID}}:role/${{secrets.ROLE_NAME}}
+  SESSION_NAME: gh-oidc-${{github.run_id}}-${{github.run_attempt}}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      # 本番確認チェック
+      - name: Check confirmation
+        if: ${{inputs.confirm == false}}
+        run: |
+          echo "確認チェックボックスをオンにしてください"
+          exit 1
+
+      # 指定バージョンのコードを取得
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+
+      # AWS認証
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{env.ROLE_ARN}}
+          role-session-name: ${{env.SESSION_NAME}}
+          aws-region: ap-northeast-1
+          
+      # Goセットアップ
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      
+      # Node.jsセットアップ
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # CDKインストール
+      - run: npm install -g aws-cdk
+
+      # バックエンドビルド
+      - run: |
+          cd backend
+          GOOS=linux GOARCH=arm64 go build -o bootstrap backend
+
+      # フロントエンドビルド
+      - run: cd frontend && npm run build
+
+      # 本番デプロイ
+      - run: |
+          cd cdk && cdk deploy --context env=prod --context developer=team --require-approval never
