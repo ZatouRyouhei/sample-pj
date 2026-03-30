@@ -62,6 +62,7 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps, en
 				jsii.String("**/*.go"),
 				jsii.String("**/go.mod"),
 				jsii.String("**/go.sum"),
+				jsii.String("**/.gitignore"),
 			},
 		}),
 		// テーブル名はcdk deployのたびに変わる可能性があるため、環境変数に設定する。
