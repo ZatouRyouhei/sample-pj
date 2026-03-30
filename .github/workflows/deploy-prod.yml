@@ -59,4 +59,5 @@ jobs:
 
       # 本番デプロイ
       - run: |
-          cd cdk && cdk deploy --context env=prod --context developer=team --require-approval never
+          cd cdk && cdk deploy --app "go build -o app . && ./app" \
+            --context env=prod --context developer=team --require-approval never
