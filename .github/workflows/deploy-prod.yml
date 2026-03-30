@@ -55,7 +55,7 @@ jobs:
           GOOS=linux GOARCH=arm64 go build -o bootstrap backend
 
       # フロントエンドビルド
-      - run: cd frontend && npm run build
+      - run: cd frontend && npm ci && npm run build
 
       # 本番デプロイ
       - run: |
