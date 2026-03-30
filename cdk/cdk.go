@@ -55,9 +55,8 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps, en
 
 	// Lambda
 	apiFunction := awslambda.NewFunction(stack, jsii.String("HelloAWSCDKFunction"), &awslambda.FunctionProps{
-		Runtime:      awslambda.Runtime_PROVIDED_AL2023(),
-		Handler:      jsii.String("bootstrap"),
-		Architecture: awslambda.Architecture_ARM_64(),
+		Runtime: awslambda.Runtime_PROVIDED_AL2023(),
+		Handler: jsii.String("bootstrap"),
 		Code: awslambda.Code_FromAsset(jsii.String("../backend"), &awss3assets.AssetOptions{
 			Exclude: &[]*string{
 				jsii.String("**/*.go"),

@@ -52,7 +52,7 @@ jobs:
       # バックエンドビルド
       - run: |
           cd backend
-          GOOS=linux GOARCH=arm64 go build -o bootstrap backend
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bootstrap .
 
       # フロントエンドビルド
       - run: cd frontend && npm ci && npm run build

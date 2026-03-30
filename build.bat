@@ -7,7 +7,7 @@ if %1 == backend (
     set GOOS=linux
     set GOARCH=amd64
     set CGO_ENABLED=0
-    go build -o bootstrap backend
+    go build -o bootstrap .
     echo バックエンドビルド完了
 )
 
