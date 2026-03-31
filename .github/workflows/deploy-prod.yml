@@ -55,7 +55,11 @@ jobs:
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bootstrap .
 
       # フロントエンドビルド
-      - run: cd frontend && npm ci && npm run build
+      - run: |
+          cd frontend
+          npm ci
+          VITE_APP_VERSION=${{github.ref_name}}
+          npm run build
 
       # 本番デプロイ
       - run: |

@@ -16,6 +16,8 @@ function GetItem() {
   return <p>{data}</p>
 }
 
+const version = import.meta.env.VITE_APP_VERSION ?? 'dev'
+
 function App() {
   const [count, setCount] = useState(0)
 
@@ -30,6 +32,7 @@ function App() {
         <div>
           <GetItem />
           <h1>Get started</h1>
+          <p>Version: {version}</p>
           <p>
             Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
           </p>
