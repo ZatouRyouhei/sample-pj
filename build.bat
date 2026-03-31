@@ -1,31 +1,46 @@
 @echo off
-chcp 65001 > nul
-if %1 == backend (
-    echo バックエンドビルド開始
-    cd /d %~dp0
-    cd backend
-    set GOOS=linux
-    set GOARCH=amd64
-    set CGO_ENABLED=0
-    go build -o bootstrap .
-    echo バックエンドビルド完了
-)
+chcp 65001
+rem バックエンドビルド
+if "%1" == "backend" goto build_backend
+if "%1" == "all"     goto build_backend
+goto end_backend
 
-if %1 == frontend (
-    echo フロントエンドビルド開始
-    cd /d %~dp0
-    cd frontend
-    call npm run build
-    echo フロントエンドビルド完了
-)
+:build_backend
+echo START build_backend
+cd /d %~dp0
+cd backend
+set GOOS=linux
+set GOARCH=amd64
+set CGO_ENABLED=0
+go build -o bootstrap .
+echo END build_backend
+:end_backend
 
-if %1 == cdk (
-    echo AWSにデプロイ開始
-    cd /d %~dp0
-    cd cdk
-    call cdk deploy
-    echo AWSにデプロイ完了
-)
+rem フロントエンドビルド
+if "%1" == "frontend" goto build_frontend
+if "%1" == "all"      goto build_frontend
+goto end_frontend
+
+:build_frontend
+echo START build_frontend
+cd /d %~dp0
+cd frontend
+call npm run build
+echo END build_frontend
+:end_frontend
+
+rem AWSへデプロイ
+if "%1" == "cdk" goto cdk_deploy
+if "%1" == "all" goto cdk_deploy
+goto end_deploy
+
+:cdk_deploy
+echo START cdk_deploy
+cd /d %~dp0
+cd cdk
+call cdk deploy
+echo END cdk_deploy
+:end_deploy
 
 cd /d %~dp0
 pause
