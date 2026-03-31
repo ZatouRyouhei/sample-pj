@@ -58,7 +58,7 @@ jobs:
       - run: |
           cd frontend
           npm ci
-          VITE_APP_VERSION=${{github.ref_name}}
+          export VITE_APP_VERSION=${{github.ref_name}}
           npm run build
 
       # 本番デプロイ
