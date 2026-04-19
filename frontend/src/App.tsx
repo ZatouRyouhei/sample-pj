@@ -16,6 +16,18 @@ function GetItem() {
   return <p>{data}</p>
 }
 
+function GetItem2() {
+  const [data, setData] = useState('')
+
+  useEffect(() => {
+    fetch('/api/test2')
+      .then(r => r.text())
+      .then(setData)
+  }, [])
+
+  return <p>{data}</p>
+}
+
 const version = import.meta.env.VITE_APP_VERSION ?? 'dev'
 
 function App() {
@@ -31,6 +43,7 @@ function App() {
         </div>
         <div>
           <GetItem />
+          <GetItem2 />
           <h1>Get started</h1>
           <p>Version: {version}</p>
           <p>
