@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/awslabs/aurora-dsql-connectors/go/pgx/dsql"
 )
 
 type AwsCdkTable struct {
@@ -48,6 +49,34 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 			StatusCode: 200,
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			Body:       string(body),
+		}, nil
+	case "/api/test2":
+		ctx := context.Background()
+		// コネクションプール作成
+		pool, err := dsql.NewPool(ctx, dsql.Config{
+			Host: os.Getenv("CLUSTER_ENDPOINT"),
+		})
+		if err != nil {
+			return events.APIGatewayProxyResponse{
+				StatusCode: 500,
+				Body:       "ERROR: DB接続失敗",
+			}, err
+		}
+		defer pool.Close()
+
+		// SQL実行
+		var name string
+		err = pool.QueryRow(ctx, "select first_name from petclinic.owners where id = '4fd413f3-74e1-42d7-90d5-d9aaea9975c9'").Scan(&name)
+		if err != nil {
+			return events.APIGatewayProxyResponse{
+				StatusCode: 500,
+				Body:       "ERROR: SQL実行失敗",
+			}, err
+		}
+		return events.APIGatewayProxyResponse{
+			StatusCode: 200,
+			Headers:    map[string]string{"Content-Type": "text/plain"},
+			Body:       name,
 		}, nil
 	default:
 		return events.APIGatewayProxyResponse{

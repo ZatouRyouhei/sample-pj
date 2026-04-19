@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsdsql"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 
 	// "github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
@@ -14,6 +17,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3assets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3deployment"
+	"github.com/aws/aws-cdk-go/awscdk/v2/customresources"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -38,6 +42,37 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps, en
 	// queue := awssqs.NewQueue(stack, jsii.String("CdkQueue"), &awssqs.QueueProps{
 	// 	VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(300)),
 	// })
+
+	// Aurora DSQL
+	cluster := awsdsql.NewCfnCluster(stack, jsii.String("DsqlCluster"), &awsdsql.CfnClusterProps{
+		DeletionProtectionEnabled: jsii.Bool(false), // 本番環境ではtrueを推奨
+		Tags: &[]*awscdk.CfnTag{
+			{
+				Key:   jsii.String("Name"), // クラスター名を指定することができないのでタグNameをつける
+				Value: jsii.String("Cluster" + prefix),
+			},
+		},
+	})
+	// lambda用のIAMロール作成（CloudWatch にログを出力できる最低限の権限）
+	lambdaRole := awsiam.NewRole(stack, jsii.String("LambdaExecutionRole"), &awsiam.RoleProps{
+		AssumedBy: awsiam.NewServicePrincipal(jsii.String("lambda.amazonaws.com"), nil),
+		ManagedPolicies: &[]awsiam.IManagedPolicy{
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(
+				jsii.String("service-role/AWSLambdaBasicExecutionRole"),
+			),
+		},
+	})
+	// IAMロールにDSQL への接続権限を追加
+	lambdaRole.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Actions: &[]*string{
+			jsii.String("dsql:DbConnect"),
+			jsii.String("dsql:DbConnectAdmin"),
+		},
+		Resources: &[]*string{
+			jsii.String(fmt.Sprintf("arn:aws:dsql:%s:%s:cluster/%s", *stack.Region(), *stack.Account(), *cluster.Ref())),
+		},
+	}))
 
 	// DynamoDB
 	table := awsdynamodb.NewTable(stack, jsii.String("AwsCdkTable"), &awsdynamodb.TableProps{
@@ -66,9 +101,12 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps, en
 			},
 		}),
 		// テーブル名はcdk deployのたびに変わる可能性があるため、環境変数に設定する。
+		// Aurora DSQLのエンドポイントを環境変数に設定する。
 		Environment: &map[string]*string{
-			"TABLE_NAME": table.TableName(),
+			"TABLE_NAME":       table.TableName(),
+			"CLUSTER_ENDPOINT": cluster.AttrEndpoint(),
 		},
+		Role: lambdaRole,
 	})
 
 	table.GrantReadWriteData(apiFunction)
@@ -128,6 +166,55 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps, en
 		Sources:           &[]awss3deployment.ISource{awss3deployment.Source_Asset(jsii.String("../frontend/dist"), nil)},
 		DestinationBucket: websiteBucket,
 		Distribution:      distribution, // デプロイ後にCloudFrontキャッシュを自動でクリア
+	})
+
+	// マイグレーション用Lambda
+	migrationRole := awsiam.NewRole(stack, jsii.String("MigrationRole"), &awsiam.RoleProps{
+		AssumedBy: awsiam.NewServicePrincipal(jsii.String("lambda.amazonaws.com"), nil),
+		ManagedPolicies: &[]awsiam.IManagedPolicy{
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(
+				jsii.String("service-role/AWSLambdaBasicExecutionRole"),
+			),
+		},
+	})
+	migrationRole.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Actions: &[]*string{
+			jsii.String("dsql:DbConnectAdmin"),
+		},
+		Resources: &[]*string{
+			jsii.String(fmt.Sprintf("arn:aws:dsql:%s:%s:cluster/%s",
+				*stack.Region(), *stack.Account(), *cluster.Ref())),
+		},
+	}))
+	migrationFn := awslambda.NewFunction(stack, jsii.String("MigrationFunction"), &awslambda.FunctionProps{
+		Runtime: awslambda.Runtime_PROVIDED_AL2023(),
+		Handler: jsii.String("bootstrap"),
+		Code: awslambda.Code_FromAsset(jsii.String("../migration"), &awss3assets.AssetOptions{
+			Exclude: &[]*string{
+				jsii.String("**/*.go"),
+				jsii.String("**/go.mod"),
+				jsii.String("**/go.sum"),
+			},
+		}),
+		Environment: &map[string]*string{
+			"CLUSTER_ENDPOINT": cluster.AttrEndpoint(),
+		},
+		Role:    migrationRole,
+		Timeout: awscdk.Duration_Minutes(jsii.Number(5)),
+	})
+
+	// デプロイのたびに実行されるカスタムリソース
+	provider := customresources.NewProvider(stack, jsii.String("MigrationProvider"), &customresources.ProviderProps{
+		OnEventHandler: migrationFn,
+	})
+	awscdk.NewCustomResource(stack, jsii.String("DbMigration"), &awscdk.CustomResourceProps{
+		ServiceToken: provider.ServiceToken(),
+		// Properties の値が前回デプロイから変化した場合のみ Lambda が再実行される。
+		// 変化を検知するための設定（タイムスタンプを指定して毎回実行させる）
+		Properties: &map[string]interface{}{
+			"Timestamp": jsii.String(time.Now().Format(time.RFC3339)),
+		},
 	})
 
 	return stack
