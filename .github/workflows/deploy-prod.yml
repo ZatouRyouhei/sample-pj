@@ -54,6 +54,11 @@ jobs:
           cd backend
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bootstrap .
 
+      # マイグレーションビルド
+      - run: |
+          cd migration
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bootstrap .
+
       # フロントエンドビルド
       - run: |
           cd frontend
