@@ -23,6 +23,11 @@ type AwsCdkTable struct {
 	Name string `dynamodbav:"Name"`
 }
 
+type PetType struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // func hello() (string, error) {
 // 	return "Hello AWS-CDK lambda!", nil
 // }
@@ -65,18 +70,39 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		defer pool.Close()
 
 		// SQL実行
-		var name string
-		err = pool.QueryRow(ctx, "select first_name from petclinic.owners where id = '4fd413f3-74e1-42d7-90d5-d9aaea9975c9'").Scan(&name)
+		rows, err := pool.Query(ctx, "select id, name from petclinic.types")
 		if err != nil {
 			return events.APIGatewayProxyResponse{
 				StatusCode: 500,
 				Body:       "ERROR: SQL実行失敗",
 			}, err
 		}
+		defer rows.Close()
+
+		var result []PetType
+		for rows.Next() {
+			var pt PetType
+			err = rows.Scan(&pt.ID, &pt.Name)
+			if err != nil {
+				return events.APIGatewayProxyResponse{
+					StatusCode: 500,
+					Body:       "ERROR: Scan失敗",
+				}, err
+			}
+			result = append(result, pt)
+		}
+
+		body, err := json.Marshal(result)
+		if err != nil {
+			return events.APIGatewayProxyResponse{
+				StatusCode: 500,
+				Body:       "ERROR: JSON変換失敗",
+			}, err
+		}
 		return events.APIGatewayProxyResponse{
 			StatusCode: 200,
 			Headers:    map[string]string{"Content-Type": "text/plain"},
-			Body:       name,
+			Body:       string(body),
 		}, nil
 	default:
 		return events.APIGatewayProxyResponse{
