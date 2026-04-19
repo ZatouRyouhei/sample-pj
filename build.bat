@@ -32,7 +32,7 @@ echo END build_frontend
 rem マイグレーションビルド
 if "%1" == "migration" goto build_migration
 if "%1" == "all"     goto build_migration
-goto end_backend
+goto end_migration
 
 :build_migration
 echo START build_migration
@@ -43,7 +43,7 @@ set GOARCH=amd64
 set CGO_ENABLED=0
 go build -o bootstrap .
 echo END build_migration
-:build_migration
+:end_migration
 
 rem AWSへデプロイ
 if "%1" == "cdk" goto cdk_deploy
